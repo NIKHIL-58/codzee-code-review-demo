@@ -12,6 +12,8 @@ class TaskCreate(BaseModel):
     @field_validator("title")
     @classmethod
     def validate_title(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("Title must not contain NUL characters")
         title = value.strip()
         if not title:
             raise ValueError("Title must not be blank")
@@ -60,6 +62,11 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             "completed": bool(row["completed"]),
         }
 
+    def validate_task_id(task_id: int):
+        # SQLite INTEGER uses signed 64-bit values; generated IDs are positive.
+        if not 1 <= task_id <= 2**63 - 1:
+            raise HTTPException(status_code=404, detail="Task not found")
+
     @app.get("/")
     def home():
         return {"message": "Codzee Demo API is running"}
@@ -83,6 +90,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
     @app.get("/tasks/{task_id}")
     def get_task(task_id: int):
+        validate_task_id(task_id)
         with connection() as db:
             row = db.execute(
                 "SELECT * FROM tasks WHERE id = ?", (task_id,)
@@ -93,6 +101,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
     @app.put("/tasks/{task_id}")
     def update_task(task_id: int, updated_task: TaskUpdate):
+        validate_task_id(task_id)
         with connection() as db:
             cursor = db.execute(
                 "UPDATE tasks SET title = ?, completed = ? WHERE id = ?",
@@ -107,6 +116,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
     @app.delete("/tasks/{task_id}", status_code=204)
     def delete_task(task_id: int):
+        validate_task_id(task_id)
         with connection() as db:
             cursor = db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
             if cursor.rowcount == 0:

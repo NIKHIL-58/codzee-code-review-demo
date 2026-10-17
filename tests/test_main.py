@@ -192,3 +192,28 @@ def test_deleted_task_id_is_not_reused(client):
     assert client.delete(f"/tasks/{first['id']}").status_code == 204
     second = client.post("/tasks", json={"title": "Second"}).json()
     assert second["id"] > first["id"]
+
+
+@pytest.mark.parametrize("method", ["GET", "PUT", "DELETE"])
+@pytest.mark.parametrize("task_id", [2**63, -(2**63) - 1, -1, 2**63 - 1])
+def test_extreme_task_ids_return_not_found(client, method, task_id):
+    kwargs = (
+        {"json": {"title": "Valid", "completed": True}}
+        if method == "PUT" else {}
+    )
+    response = client.request(method, f"/tasks/{task_id}", **kwargs)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Task not found"}
+
+
+@pytest.mark.parametrize("title", ["\x00x", "x\x00y", "x\x00"])
+def test_nul_titles_rejected_without_changing_data(client, title):
+    created = client.post("/tasks", json={"title": "Original"}).json()
+    response = client.post("/tasks", json={"title": title})
+    assert response.status_code == 422
+    response = client.put(
+        f"/tasks/{created['id']}",
+        json={"title": title, "completed": True},
+    )
+    assert response.status_code == 422
+    assert client.get("/tasks").json() == [created]
