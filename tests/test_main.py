@@ -48,3 +48,18 @@ def test_get_nonexistent_task():
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
+
+def test_create_task_with_whitespace_title():
+    for title in ["   ", "\t", "\n"]:
+        response = client.post("/tasks", json={"title": title})
+        assert response.status_code == 422
+
+
+def test_create_task_trims_title():
+    response = client.post(
+        "/tasks",
+        json={"title": "  Learn FastAPI  "}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["title"] == "Learn FastAPI"

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="Codzee Demo API")
 
@@ -9,6 +9,14 @@ next_id = 1
 
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        title = value.strip()
+        if not title:
+            raise ValueError("Title must not be blank")
+        return title
 
 
 @app.get("/")
